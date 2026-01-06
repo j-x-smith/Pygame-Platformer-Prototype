@@ -75,7 +75,9 @@ def load_level(level_data, game):
                 elif cell == Zorg:
                     new_tile = Zorg(x, y)
                     new_tile.tile_sprites = game.tile_sprites
+                    new_tile.game = game
                     game.all_sprites.add(new_tile)
+                    
                 elif cell == GoalTile:
                     new_tile = GoalTile(x, y)
                     game.tile_sprites.add(new_tile)

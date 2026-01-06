@@ -3,6 +3,7 @@ Jamie X Smith
 '''
 import pygame
 from config.config import *
+from src.ui import *
 from src.sprites import Player
 from src.levelhandler import parse_level, load_level
 from src.soundhandler import load_music
@@ -25,6 +26,8 @@ class Game:
 
         self.all_sprites = pygame.sprite.Group()
         self.tile_sprites = pygame.sprite.Group()
+        self.enemy_sprites = pygame.sprite.Group()
+        self.laser_sprites = pygame.sprite.Group()
         
         self.curr_level = 1
         self.load_new_level(self.curr_level)
@@ -69,8 +72,7 @@ class Game:
             
             
             # Render and blit debug text
-            debug_text = DEBUG_FONT.render(f"FPS: {self.clock.get_fps():.0f}, Jumps Used: {self.player.current_jumps}, Max Jumps: {self.player.max_jump_count}", antialias=True, color=WHITE)
-            self.screen.blit(debug_text, (10, 10))
+            DEBUG_FONT.draw(self.screen, f"FPS: {self.clock.get_fps():.0f}", pos=(10,10))
 
             pygame.display.flip()
 

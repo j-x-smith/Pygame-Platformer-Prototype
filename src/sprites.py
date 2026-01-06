@@ -1,6 +1,7 @@
 '''
 Jamie X Smith
 '''
+import random
 import pygame
 from config.config import *
 from src.soundhandler import load_sound
@@ -37,8 +38,10 @@ class Player(GameSprite):
         self.on_ground = False
         self.tile_sprites = None
 
-        self.death_sound = load_sound("assets/sounds/sfx/death.wav", volume=300)
+        self.death_sound = load_sound("assets/sounds/sfx/death.wav", volume=100)
         self.jump_sound = load_sound("assets/sounds/sfx/jump.wav", volume=100)
+        self.dash_sound = load_sound("assets/sounds/sfx/dash.wav", volume=100)
+        self.goal_sound = load_sound("assets/sounds/sfx/flag.wav", volume=100)
         self.jump_held = False  # prevents consuming multiple jumps while key is held
         self.down_held = False
         self.is_dashing =False
@@ -76,6 +79,7 @@ class Player(GameSprite):
 
         if dash_pressed and not self.is_dashing and self.direction_x != 0:
             self.is_dashing = True
+            self.dash_sound.play()
             self.dash_timer = self.dash_duration
         
         # Edge-detect jump so holding the key doesn't chain-fire jumps
@@ -184,6 +188,7 @@ class Player(GameSprite):
                 
                         # --- Goal Reached ---
                         self.goal_reached = True
+                        self.goal_sound.play()
                         self.game.curr_level +=1
                         self.game.load_new_level(self.game.curr_level) # Load the new level
                         print("GOAL!")
@@ -210,77 +215,126 @@ class Zorg(GameSprite):
         self.on_ground = False
         self.direction_x = 1
         self.velocity_y = 0
+        self.state = EnemyStates.MOVE_R
+        self.doing_attack = False
+        self.game = None
+
+        self.shoot_sound = load_sound("assets/sounds/sfx/laser_shoot.wav", volume=100)
+        self.attacking = False
 
     def update(self, delta_time):
         prev_x = self.rect.x
         prev_y = self.rect.y
 
+        question_attack = random.randint(1, 900000)
+        if question_attack % 200 == 0:
+            print("True")
+            self.state = EnemyStates.ATTACKING
+
+        match self.state:
+            case EnemyStates.IDLE:
+                self.direction_x = 0
+            case EnemyStates.MOVE_L:
+                self.direction_x = -1
+            case EnemyStates.MOVE_R:
+                self.direction_x = 1
+            case EnemyStates.ATTACKING:
+                if not self.doing_attack:
+                    prev_state = self.state
+                    laser = Laser(self.rect.x, self.rect.y, self.direction_x)
+                    self.game.laser_sprites.add(laser)
+                    self.game.all_sprites.add(laser)
+                    self.shoot_sound.play()
+                    self.doing_attack = True
+                    if self.direction_x == -1:
+                        self.state = EnemyStates.MOVE_L
+                    elif self.direction_x == 1:
+                        self.state = EnemyStates.MOVE_R
+                    
+                elif self.doing_attack == True:
+                    self.doing_attack = False
+
         self.rect.x += self.direction_x * self.speed * delta_time
-    
-         # Check horizontal collisions (exclude spike tiles)
+
+        if self.rect.x < 0:
+            self.rect.left = self.rect.right
+            if self.state == EnemyStates.MOVE_L:
+                self.state = EnemyStates.MOVE_R
+        if self.rect.x > WINDOW_WIDTH:
+            self.rect.right = self.rect.left
+            if self.state == EnemyStates.MOVE_R:
+                self.state = EnemyStates.MOVE_L
+
         if self.tile_sprites:
             horizontal_collisions = pygame.sprite.spritecollide(self, self.tile_sprites, False)
             for tile in horizontal_collisions:
-                # Skip spike tiles - they don't block movement, they kill
                 if isinstance(tile, (SpikeTile, GoalTile)):
                     continue
                 if self.direction_x > 0:
                     self.rect.right = tile.rect.left
+                    self.state = EnemyStates.MOVE_L
                 elif self.direction_x < 0:
                     self.rect.left = tile.rect.right
+                    self.state = EnemyStates.MOVE_R
 
         self.velocity_y += GRAVITY * delta_time
         self.rect.y += self.velocity_y * delta_time
 
         self.on_ground = False
         if self.tile_sprites:
-            # Get all tiles the player is currently colliding with
+
             vertical_collisions = pygame.sprite.spritecollide(self, self.tile_sprites, False)
             
             for tile in vertical_collisions:
-                # Skip spike tiles - they don't block movement, they kill
                 if isinstance(tile, (SpikeTile, GoalTile)):
                     continue
                     
-                # Calculate previous bottom position
                 prev_bottom = prev_y + self.rect.height
                 
-                # Determine which side the player is overlapping from
                 overlap_from_top = self.rect.bottom - tile.rect.top
                 overlap_from_bottom = tile.rect.bottom - self.rect.top
-                
-                # Ground collision: player is falling (or stationary) and overlapping tile from above
+
                 if self.velocity_y >= 0:
-                    # Check if player's bottom crossed into the tile
                     if self.rect.bottom > tile.rect.top:
-                        # Make sure player was above tile before movement
                         if prev_bottom <= tile.rect.top:
                             self.rect.bottom = tile.rect.top
                             self.velocity_y = 0
                             self.on_ground = True
                             self.current_jumps = 0
                             break
-                        # If already inside, push up if more overlap from top
+
                         elif overlap_from_top > overlap_from_bottom:
                             self.rect.bottom = tile.rect.top
                             self.velocity_y = 0
                             self.on_ground = True
                             break
                 
-                # Ceiling collision: player is moving up and overlapping tile from below
                 elif self.velocity_y < 0:
-                    # Check if player's top crossed into the tile
                     if self.rect.top < tile.rect.bottom:
-                        # Make sure player was below tile before movement
                         if prev_y >= tile.rect.bottom:
                             self.rect.top = tile.rect.bottom
                             self.velocity_y = 0
                             break
-                        # If already inside, push down if more overlap from bottom
                         elif overlap_from_bottom > overlap_from_top:
                             self.rect.top = tile.rect.bottom
                             self.velocity_y = 0
                             break
+
+class Laser(GameSprite):
+    def __init__(self, x, y, direction):
+        super().__init__("assets/sprites/laser.png",x,y, LASER_SPEED)
+        self.image = pygame.transform.scale(self.image, (60, 16))
+        self.rect = self.image.get_rect(topleft=(x,y))
+        self.direction = direction
+    
+    def update(self, delta_time):
+        self.rect.x += self.speed * self.direction * delta_time
+
+        if self.rect.x > WINDOW_WIDTH:
+            self.kill()
+        elif self.rect.x < 0:
+            self.kill()
+        
 
 
 class GrassTile(GameSprite):

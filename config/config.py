@@ -1,7 +1,8 @@
 '''
 Jamie X Smith
 '''
-import pygame
+import pygame, enum
+from src.ui import Font
 pygame.font.init()
 
 # WINDOW SETTINGS
@@ -10,11 +11,14 @@ WINDOW_HEIGHT = 720
 WINDOW_TITLE = "Super Ivanovic 64"
 FPS = 60
 
-# FONTS
-DEBUG_FONT = pygame.font.Font(None, size=24)
-
+class EnemyStates(enum.Enum):
+    IDLE = 0
+    MOVE_L = 1
+    MOVE_R = 2
+    ATTACKING = 3
 
 # VALUES
+LASER_SPEED = 750
 PLAYER_SPEED = 300
 PLAYER_LIVES = 3
 PLAYER_HEIGHT = 36
@@ -32,3 +36,10 @@ PLAYER_JUMP_COUNT = 2
 WHITE = (255,255,255)
 BLACK = (0,0,0)
 BG_COLOR = (129, 141, 179)
+
+BUTTON_REG = (161, 161, 161)
+BUTTON_HOV = (207, 207, 207)
+BUTTON_PRESS = (255, 255, 255)
+
+# FONTS
+DEBUG_FONT = Font(None, 24, WHITE)
