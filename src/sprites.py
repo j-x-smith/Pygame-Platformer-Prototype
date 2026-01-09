@@ -7,22 +7,161 @@ from config.config import *
 from src.soundhandler import load_sound
 
 class GameSprite(pygame.sprite.Sprite):
-    def __init__(self, image_source, x, y, speed):
-        super().__init__()
-        if isinstance(image_source, str):
-            self.image = pygame.image.load(image_source).convert_alpha()
+    """The base class for any sprite that is used in the game.
+       Paramaters:
+        - image_source - (string, or preloaded iamge)
+        - x / y - The coordinates you would like the sprite to spawn at.
+        - speed - The speed that the sprite will move at (if any speed defined)"""
+    def __init__(self, image_source, x, y, speed, type=None):
+        super().__init__() # Initialises the sprite class
+        if isinstance(image_source, str): # Checking if the source is a string.
+            self.image = pygame.image.load(image_source).convert_alpha() # If so, then load the image.
         else:
-            self.image = image_source
+            self.image = image_source # Or assign the preloaded image.
         
-        self.rect = self.image.get_rect(topleft=(x,y))
-        self.speed = speed
+        self.rect = self.image.get_rect(topleft=(x,y)) # Set the "rect" variable to be used in collisions.
+        self.speed = speed # Set the speed variable to be used in the update functions
+        self.type = type
 
     def update(self, delta_time):
+        """The Basic """
         pass
 
+    def handle_collision(self, prev_x, prev_y, horiz_verti="HORIZ"):
+        if horiz_verti == "HORIZ":
+            # Check horizontal collisions (exclude spike tiles)
+            if self.tile_sprites:
+                horizontal_collisions = pygame.sprite.spritecollide(self, self.tile_sprites, False)
+                for tile in horizontal_collisions:
+                    # Skip spike tiles - they don't block movement, they kill
+                    if isinstance(tile, (SpikeTile, GoalTile)):
+                        continue
+                    match self.type:
+                        case "Player":
+                            if self.direction_x > 0:
+                                self.rect.right = tile.rect.left
+                            elif self.direction_x < 0:
+                                self.rect.left = tile.rect.right
+                        case "Enemy":
+                            if self.direction_x > 0:
+                                self.rect.right = tile.rect.left
+                                self.state = EnemyStates.MOVE_L
+                            elif self.direction_x < 0:
+                                self.rect.left = tile.rect.right
+                                self.state = EnemyStates.MOVE_R
+                        case "Laser":
+                            self.kill()
+
+        elif horiz_verti == "VERTI":
+            # Check vertical collisions (exclude spike tiles)
+            self.on_ground = False
+            if self.tile_sprites:
+                # Get all tiles the player is currently colliding with
+                vertical_collisions = pygame.sprite.spritecollide(self, self.tile_sprites, False)
+                
+                for tile in vertical_collisions:
+                    # Skip spike tiles - they don't block movement, they kill
+                    if isinstance(tile, (SpikeTile, GoalTile)):
+                        continue
+                        
+                    # Calculate previous bottom position
+                    prev_bottom = prev_y + self.rect.height
+                    
+                    # Determine which side the player is overlapping from
+                    overlap_from_top = self.rect.bottom - tile.rect.top
+                    overlap_from_bottom = tile.rect.bottom - self.rect.top
+                    
+                    # Ground collision: player is falling (or stationary) and overlapping tile from above
+                    if self.velocity_y >= 0:
+                        # Check if player's bottom crossed into the tile
+                        if self.rect.bottom > tile.rect.top:
+                            # Make sure player was above tile before movement
+                            if prev_bottom <= tile.rect.top:
+                                self.rect.bottom = tile.rect.top
+                                self.velocity_y = 0
+                                self.on_ground = True
+                                self.current_jumps = 0
+                                break
+                            # If already inside, push up if more overlap from top
+                            elif overlap_from_top > overlap_from_bottom:
+                                self.rect.bottom = tile.rect.top
+                                self.velocity_y = 0
+                                self.on_ground = True
+                                break
+                    
+                    # Ceiling collision: player is moving up and overlapping tile from below
+                    elif self.velocity_y < 0:
+                        # Check if player's top crossed into the tile
+                        if self.rect.top < tile.rect.bottom:
+                            # Make sure player was below tile before movement
+                            if prev_y >= tile.rect.bottom:
+                                self.rect.top = tile.rect.bottom
+                                self.velocity_y = 0
+                                break
+                            # If already inside, push down if more overlap from bottom
+                            elif overlap_from_bottom > overlap_from_top:
+                                self.rect.top = tile.rect.bottom
+                                self.velocity_y = 0
+                                break
+        
+        if self.tile_sprites:
+            # Get all tiles the player is now touching in its final, corrected position.
+            special_collisions = pygame.sprite.spritecollide(self, self.tile_sprites, False)
+            
+            for tile in special_collisions:
+                match self.type:
+                    case "Player":
+                        # 1. Check for Spike Collision (Hazard)
+                        if isinstance(tile, SpikeTile):
+                            self.death_sound.play()
+                            self.respawn()
+                            return  # Exit early to prevent any further updates
+                        
+                        # 2. Check for Goal Collision (The working goal logic!)
+                        # The logic is identical to spikes: if the bounding boxes overlap, the event is triggered.
+                        if isinstance(tile, GoalTile) and self.goal_reached == False: 
+                            if self.rect.bottom > tile.rect.top and self.rect.bottom <= tile.rect.bottom:
+                        
+                                # --- Goal Reached ---
+                                self.goal_reached = True
+                                self.goal_sound.play()
+                                self.game.curr_level +=1
+                                self.game.load_new_level(self.game.curr_level) # Load the new level
+                                print("GOAL!")
+                                return # Exit early after a goal is triggered
+                    case "Enemy":
+                        if isinstance(tile, SpikeTile):
+                            if self.direction_x > 0:
+                                self.rect.right = tile.rect.left
+                                self.state = EnemyStates.MOVE_L
+                            elif self.direction_x < 0:
+                                self.rect.left = tile.rect.right
+                                self.state = EnemyStates.MOVE_R
+                    case "Laser":
+                        if isinstance(tile, SpikeTile):
+                            self.kill()
+
+        # Screen boundary checks
+        if self.rect.left < 0:
+            match self.type:
+                case "Player":
+                    self.rect.left = 0
+                case "Enemy":
+                    self.state = EnemyStates.MOVE_R
+                case "Laser":
+                    self.kill()
+        if self.rect.right > WINDOW_WIDTH:
+            match self.type:
+                case "Player":
+                    self.rect.right = WINDOW_WIDTH
+                case "Enemy":
+                    self.state = EnemyStates.MOVE_L
+                case "Laser":
+                    self.kill()
+                
 class Player(GameSprite):
     def __init__(self, x, y):
-        super().__init__("assets/sprites/ivan.png", x, y, PLAYER_SPEED)
+        super().__init__("assets/sprites/ivan.png", x, y, PLAYER_SPEED, "Player")
         self.image = pygame.transform.scale(self.image, (PLAYER_WIDTH, PLAYER_HEIGHT))
         # Recreate rect with correct size after scaling
         self.rect = self.image.get_rect(topleft=(x, y))
@@ -103,102 +242,13 @@ class Player(GameSprite):
         
         self.rect.x += self.direction_x * self.speed * delta_time
 
-        # Check horizontal collisions (exclude spike tiles)
-        if self.tile_sprites:
-            horizontal_collisions = pygame.sprite.spritecollide(self, self.tile_sprites, False)
-            for tile in horizontal_collisions:
-                # Skip spike tiles - they don't block movement, they kill
-                if isinstance(tile, (SpikeTile, GoalTile)):
-                    continue
-                if self.direction_x > 0:
-                    self.rect.right = tile.rect.left
-                elif self.direction_x < 0:
-                    self.rect.left = tile.rect.right
-        
-        # Apply gravity and vertical movement
+        self.handle_collision(prev_x,prev_y, "HORIZ")
+
         self.velocity_y += GRAVITY * delta_time
         self.rect.y += self.velocity_y * delta_time
 
-        # Check vertical collisions (exclude spike tiles)
-        self.on_ground = False
-        if self.tile_sprites:
-            # Get all tiles the player is currently colliding with
-            vertical_collisions = pygame.sprite.spritecollide(self, self.tile_sprites, False)
-            
-            for tile in vertical_collisions:
-                # Skip spike tiles - they don't block movement, they kill
-                if isinstance(tile, (SpikeTile, GoalTile)):
-                    continue
-                    
-                # Calculate previous bottom position
-                prev_bottom = prev_y + self.rect.height
-                
-                # Determine which side the player is overlapping from
-                overlap_from_top = self.rect.bottom - tile.rect.top
-                overlap_from_bottom = tile.rect.bottom - self.rect.top
-                
-                # Ground collision: player is falling (or stationary) and overlapping tile from above
-                if self.velocity_y >= 0:
-                    # Check if player's bottom crossed into the tile
-                    if self.rect.bottom > tile.rect.top:
-                        # Make sure player was above tile before movement
-                        if prev_bottom <= tile.rect.top:
-                            self.rect.bottom = tile.rect.top
-                            self.velocity_y = 0
-                            self.on_ground = True
-                            self.current_jumps = 0
-                            break
-                        # If already inside, push up if more overlap from top
-                        elif overlap_from_top > overlap_from_bottom:
-                            self.rect.bottom = tile.rect.top
-                            self.velocity_y = 0
-                            self.on_ground = True
-                            break
-                
-                # Ceiling collision: player is moving up and overlapping tile from below
-                elif self.velocity_y < 0:
-                    # Check if player's top crossed into the tile
-                    if self.rect.top < tile.rect.bottom:
-                        # Make sure player was below tile before movement
-                        if prev_y >= tile.rect.bottom:
-                            self.rect.top = tile.rect.bottom
-                            self.velocity_y = 0
-                            break
-                        # If already inside, push down if more overlap from bottom
-                        elif overlap_from_bottom > overlap_from_top:
-                            self.rect.top = tile.rect.bottom
-                            self.velocity_y = 0
-                            break
-        
-        if self.tile_sprites:
-            # Get all tiles the player is now touching in its final, corrected position.
-            special_collisions = pygame.sprite.spritecollide(self, self.tile_sprites, False)
-            
-            for tile in special_collisions:
-                # 1. Check for Spike Collision (Hazard)
-                if isinstance(tile, SpikeTile):
-                    self.death_sound.play()
-                    self.respawn()
-                    return  # Exit early to prevent any further updates
-                
-                # 2. Check for Goal Collision (The working goal logic!)
-                # The logic is identical to spikes: if the bounding boxes overlap, the event is triggered.
-                if isinstance(tile, GoalTile) and self.goal_reached == False: 
-                    if self.rect.bottom > tile.rect.top and self.rect.bottom <= tile.rect.bottom:
-                
-                        # --- Goal Reached ---
-                        self.goal_reached = True
-                        self.goal_sound.play()
-                        self.game.curr_level +=1
-                        self.game.load_new_level(self.game.curr_level) # Load the new level
-                        print("GOAL!")
-                        return # Exit early after a goal is triggered
-        # Screen boundary checks
-        if self.rect.left < 0:
-            self.rect.left = 0
-        if self.rect.right > WINDOW_WIDTH:
-            self.rect.right = WINDOW_WIDTH
-    
+        self.handle_collision(prev_x,prev_y, "VERTI")
+
     def respawn(self):
         """Respawn the player at their spawn position"""
         self.rect.x = self.spawn_x
@@ -208,7 +258,7 @@ class Player(GameSprite):
 
 class Zorg(GameSprite):
     def __init__(self, x, y):
-        super().__init__("assets/sprites/zorg.png", x, y, 150)
+        super().__init__("assets/sprites/zorg.png", x, y, 150, "Enemy")
         self.image = pygame.transform.scale(self.image, (TILE_WIDTH, TILE_HEIGHT))
         self.rect = self.image.get_rect(topleft=(x,y))
         self.tile_sprites = None
@@ -244,6 +294,7 @@ class Zorg(GameSprite):
                     laser = Laser(self.rect.x, self.rect.y, self.direction_x)
                     self.game.laser_sprites.add(laser)
                     self.game.all_sprites.add(laser)
+                    laser.tile_sprites = self.game.tile_sprites
                     self.shoot_sound.play()
                     self.doing_attack = True
                     if self.direction_x == -1:
@@ -255,80 +306,29 @@ class Zorg(GameSprite):
                     self.doing_attack = False
 
         self.rect.x += self.direction_x * self.speed * delta_time
-
-        if self.rect.x < 0:
-            self.rect.left = self.rect.right
-            if self.state == EnemyStates.MOVE_L:
-                self.state = EnemyStates.MOVE_R
-        if self.rect.x > WINDOW_WIDTH:
-            self.rect.right = self.rect.left
-            if self.state == EnemyStates.MOVE_R:
-                self.state = EnemyStates.MOVE_L
-
-        if self.tile_sprites:
-            horizontal_collisions = pygame.sprite.spritecollide(self, self.tile_sprites, False)
-            for tile in horizontal_collisions:
-                if isinstance(tile, (SpikeTile, GoalTile)):
-                    continue
-                if self.direction_x > 0:
-                    self.rect.right = tile.rect.left
-                    self.state = EnemyStates.MOVE_L
-                elif self.direction_x < 0:
-                    self.rect.left = tile.rect.right
-                    self.state = EnemyStates.MOVE_R
-
+       
+        self.handle_collision(prev_x,prev_y, "HORIZ")
+       
         self.velocity_y += GRAVITY * delta_time
         self.rect.y += self.velocity_y * delta_time
 
-        self.on_ground = False
-        if self.tile_sprites:
+        self.handle_collision(prev_x,prev_y, "VERTI")
 
-            vertical_collisions = pygame.sprite.spritecollide(self, self.tile_sprites, False)
-            
-            for tile in vertical_collisions:
-                if isinstance(tile, (SpikeTile, GoalTile)):
-                    continue
-                    
-                prev_bottom = prev_y + self.rect.height
-                
-                overlap_from_top = self.rect.bottom - tile.rect.top
-                overlap_from_bottom = tile.rect.bottom - self.rect.top
-
-                if self.velocity_y >= 0:
-                    if self.rect.bottom > tile.rect.top:
-                        if prev_bottom <= tile.rect.top:
-                            self.rect.bottom = tile.rect.top
-                            self.velocity_y = 0
-                            self.on_ground = True
-                            self.current_jumps = 0
-                            break
-
-                        elif overlap_from_top > overlap_from_bottom:
-                            self.rect.bottom = tile.rect.top
-                            self.velocity_y = 0
-                            self.on_ground = True
-                            break
-                
-                elif self.velocity_y < 0:
-                    if self.rect.top < tile.rect.bottom:
-                        if prev_y >= tile.rect.bottom:
-                            self.rect.top = tile.rect.bottom
-                            self.velocity_y = 0
-                            break
-                        elif overlap_from_bottom > overlap_from_top:
-                            self.rect.top = tile.rect.bottom
-                            self.velocity_y = 0
-                            break
 
 class Laser(GameSprite):
     def __init__(self, x, y, direction):
-        super().__init__("assets/sprites/laser.png",x,y, LASER_SPEED)
+        super().__init__("assets/sprites/laser.png",x,y, LASER_SPEED, "Laser")
         self.image = pygame.transform.scale(self.image, (60, 16))
         self.rect = self.image.get_rect(topleft=(x,y))
         self.direction = direction
+        self.tile_sprites = None
     
     def update(self, delta_time):
+        prev_x = self.rect.x
+        prev_y = self.rect.y
         self.rect.x += self.speed * self.direction * delta_time
+
+        self.handle_collision(prev_x,prev_y, "HORIZ")
 
         if self.rect.x > WINDOW_WIDTH:
             self.kill()

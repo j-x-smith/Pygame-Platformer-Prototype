@@ -70,7 +70,6 @@ class Game:
             self.screen.fill(self.bg_color)
             self.all_sprites.draw(self.screen)
             
-            
             # Render and blit debug text
             DEBUG_FONT.draw(self.screen, f"FPS: {self.clock.get_fps():.0f}", pos=(10,10))
 
