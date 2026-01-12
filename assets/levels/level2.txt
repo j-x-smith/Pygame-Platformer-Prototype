@@ -7,7 +7,7 @@
 ..................SGDDGG.............
 GGGS..............SDDDDDGS....F......
 DDD......................GGGGGGGGGGGG
-....S....................DDDDDDDDDDDD
+....S..Z.................DDDDDDDDDDDD
 ...GGGGGGGGG.............DCCCCCCCCCCC
 P.....................Z..DCCCCCCCCCCC
 GGGGGGGGGGGGGGGGGGGGGGGGGDCCCCCCCCCCC

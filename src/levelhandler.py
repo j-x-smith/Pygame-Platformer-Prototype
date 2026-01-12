@@ -41,16 +41,18 @@ def load_level(level_data, game):
                 if cell == Player:
                     game.player = Player(x, y)
                     game.player.tile_sprites = game.tile_sprites
+                    game.player.enemy_sprites = game.enemy_sprites
                     game.player.game = game
-                    game.all_sprites.add(game.player)
+                    game.render_layer.add(game.player)
+                    game.update_layer.add(game.player)
                 elif cell == GrassTile:
                     new_tile = GrassTile(x, y)
                     game.tile_sprites.add(new_tile)
-                    game.all_sprites.add(new_tile)
+                    game.render_layer.add(new_tile)
                 elif cell == DirtTile:
                     new_tile = DirtTile(x, y)
                     game.tile_sprites.add(new_tile)
-                    game.all_sprites.add(new_tile)
+                    game.render_layer.add(new_tile)
                 elif cell == SpikeTile:
                     rotation = 0    
                     directions = [
@@ -67,21 +69,23 @@ def load_level(level_data, game):
 
                     new_tile = SpikeTile(x, y, rotation)
                     game.tile_sprites.add(new_tile)
-                    game.all_sprites.add(new_tile)
+                    game.render_layer.add(new_tile)
                 elif cell == CobbleTile:
                     new_tile = CobbleTile(x, y)
                     game.tile_sprites.add(new_tile)
-                    game.all_sprites.add(new_tile)
+                    game.render_layer.add(new_tile)
                 elif cell == Zorg:
                     new_tile = Zorg(x, y)
                     new_tile.tile_sprites = game.tile_sprites
                     new_tile.game = game
-                    game.all_sprites.add(new_tile)
+                    game.render_layer.add(new_tile)
+                    game.update_layer.add(new_tile)
+                    game.enemy_sprites.add(new_tile)
                     
                 elif cell == GoalTile:
                     new_tile = GoalTile(x, y)
                     game.tile_sprites.add(new_tile)
-                    game.all_sprites.add(new_tile)
+                    game.render_layer.add(new_tile)
 
 def get_tile(level_data, row, col):
     if 0 <= row < len(level_data) and 0 <= col < len(level_data[row]):

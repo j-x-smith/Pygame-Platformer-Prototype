@@ -12,7 +12,7 @@ class GameSprite(pygame.sprite.Sprite):
         - image_source - (string, or preloaded iamge)
         - x / y - The coordinates you would like the sprite to spawn at.
         - speed - The speed that the sprite will move at (if any speed defined)"""
-    def __init__(self, image_source, x, y, speed, type=None):
+    def __init__(self, image_source, x, y, speed, sprite_type=None):
         super().__init__() # Initialises the sprite class
         if isinstance(image_source, str): # Checking if the source is a string.
             self.image = pygame.image.load(image_source).convert_alpha() # If so, then load the image.
@@ -21,10 +21,11 @@ class GameSprite(pygame.sprite.Sprite):
         
         self.rect = self.image.get_rect(topleft=(x,y)) # Set the "rect" variable to be used in collisions.
         self.speed = speed # Set the speed variable to be used in the update functions
-        self.type = type
+        self.type = sprite_type # sets the sprite type to be used in the collisions.
 
     def update(self, delta_time):
-        """The Basic """
+        """The Basic function to be added to each sprite to handle what they do
+        in every frame."""
         pass
 
     def handle_collision(self, prev_x, prev_y, horiz_verti="HORIZ"):
@@ -115,6 +116,7 @@ class GameSprite(pygame.sprite.Sprite):
                         if isinstance(tile, SpikeTile):
                             self.death_sound.play()
                             self.respawn()
+                            self.lives -= 1
                             return  # Exit early to prevent any further updates
                         
                         # 2. Check for Goal Collision (The working goal logic!)
@@ -129,6 +131,12 @@ class GameSprite(pygame.sprite.Sprite):
                                 self.game.load_new_level(self.game.curr_level) # Load the new level
                                 print("GOAL!")
                                 return # Exit early after a goal is triggered
+                            
+                        if isinstance(tile, Laser):
+                            self.lives -= 1
+                            self.death_sound.play()
+                            self.respawn()
+                            
                     case "Enemy":
                         if isinstance(tile, SpikeTile):
                             if self.direction_x > 0:
@@ -176,6 +184,7 @@ class Player(GameSprite):
 
         self.on_ground = False
         self.tile_sprites = None
+        self.enemy_sprites = None
 
         self.death_sound = load_sound("assets/sounds/sfx/death.wav", volume=100)
         self.jump_sound = load_sound("assets/sounds/sfx/jump.wav", volume=100)
@@ -222,7 +231,7 @@ class Player(GameSprite):
             self.dash_timer = self.dash_duration
         
         # Edge-detect jump so holding the key doesn't chain-fire jumps
-        if down_pressed and not self.down_held:
+        if (down_pressed and not self.down_held) and (self.on_ground == False):
             self.velocity_y = DOWN_STRENGTH
             self.on_ground = False
             self.jump_sound.play()
@@ -243,11 +252,29 @@ class Player(GameSprite):
         self.rect.x += self.direction_x * self.speed * delta_time
 
         self.handle_collision(prev_x,prev_y, "HORIZ")
+        self.check_enemy_collisions(self.enemy_sprites)
 
         self.velocity_y += GRAVITY * delta_time
         self.rect.y += self.velocity_y * delta_time
 
         self.handle_collision(prev_x,prev_y, "VERTI")
+        self.check_enemy_collisions(self.enemy_sprites)
+
+        if self.lives == 0:
+            self.kill()
+
+    def check_enemy_collisions(self, enemy_sprites):
+        hits = pygame.sprite.spritecollide(self, enemy_sprites, False)
+
+        for enemy in hits:
+            if self.velocity_y > 0 and self.rect.bottom < enemy.rect.centery:
+                enemy.kill()
+                self.velocity_y = -300
+                self.current_jumps = 1
+            else:
+                self.death_sound.play()
+                self.respawn()
+                self.lives -= 1
 
     def respawn(self):
         """Respawn the player at their spawn position"""
@@ -291,9 +318,10 @@ class Zorg(GameSprite):
             case EnemyStates.ATTACKING:
                 if not self.doing_attack:
                     prev_state = self.state
-                    laser = Laser(self.rect.x, self.rect.y, self.direction_x)
+                    laser = Laser(self.rect.x, self.rect.centery, self.direction_x)
                     self.game.laser_sprites.add(laser)
-                    self.game.all_sprites.add(laser)
+                    self.game.render_layer.add(laser)
+                    self.game.update_layer.add(laser)
                     laser.tile_sprites = self.game.tile_sprites
                     self.shoot_sound.play()
                     self.doing_attack = True

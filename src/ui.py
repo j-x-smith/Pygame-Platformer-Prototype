@@ -11,14 +11,9 @@ class Font:
 
         self.color = color
 
-    def draw(self, screen: pygame.surface.Surface, text, pos,rect=None):
-        if rect:
-            rendered_text = self.font.render(text, antialias=True, color=self.color)
-            text_rect = rendered_text.get_rect(center=rect.center)
-            screen.blit(rendered_text, text_rect)
-        if not rect and pos:
-            rendered_text = self.font.render(text, antialias=True, color=self.color)
-            screen.blit(rendered_text, pos)
+    def draw_text(self, screen: pygame.surface.Surface, text, pos):
+        rendered_text = self.font.render(text, antialias=True, color=self.color)
+        screen.blit(rendered_text, pos)
 
 # Button Class
 class Button:

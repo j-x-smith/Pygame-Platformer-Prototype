@@ -20,11 +20,13 @@ class Game:
         self.bg_color = BG_COLOR
         self.bg_music = load_music("assets/sounds/music/bg_music2.wav", volume=20, loop=True)
         self.bg_music.play()
+        self.state = "PLAYING"
 
         pygame.display.set_caption(WINDOW_TITLE)
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 
-        self.all_sprites = pygame.sprite.Group()
+        self.render_layer = pygame.sprite.Group()
+        self.update_layer = pygame.sprite.Group()
         self.tile_sprites = pygame.sprite.Group()
         self.enemy_sprites = pygame.sprite.Group()
         self.laser_sprites = pygame.sprite.Group()
@@ -35,13 +37,17 @@ class Game:
         if self.player is None:
             self.player = Player(60, 450)
             self.player.tile_sprites = self.tile_sprites
+            self.player.enemy_sprites = self.enemy_sprites
             self.all_sprites.add(self.player)
 
     def load_new_level(self, level_number):
         try:
             level_data = parse_level(f"./assets/levels/level{level_number}.txt")
-            self.all_sprites.empty()
+            self.render_layer.empty()
+            self.update_layer.empty()
             self.tile_sprites.empty()
+            self.enemy_sprites.empty()
+            self.laser_sprites.empty()
             self.player = None
             load_level(level_data, self)
         except Exception as e:
@@ -65,14 +71,16 @@ class Game:
 
             self.handle_input()
 
-            self.all_sprites.update(self.delta_time)
+            self.update_layer.update(self.delta_time)
 
             self.screen.fill(self.bg_color)
-            self.all_sprites.draw(self.screen)
+            self.render_layer.draw(self.screen)
             
             # Render and blit debug text
-            DEBUG_FONT.draw(self.screen, f"FPS: {self.clock.get_fps():.0f}", pos=(10,10))
-
+            if self.state == "PLAYING":
+                DEBUG_FONT.draw_text(self.screen, f"FPS: {self.clock.get_fps():.0f}, LIVES: {self.player.lives}", pos=(10,10))
+            elif self.state == "GAME_OVER":
+                DEBUG_FONT.draw_text(self.screen, "Game Over!", (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2))
             pygame.display.flip()
 
         pygame.quit()
