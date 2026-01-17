@@ -11,14 +11,25 @@ class Font:
 
         self.color = color
 
-    def draw_text(self, screen: pygame.surface.Surface, text, pos):
-        rendered_text = self.font.render(text, antialias=True, color=self.color)
-        screen.blit(rendered_text, pos)
+    def draw_text(self, screen: pygame.surface.Surface, text, pos, button=False, centered=False):
+        if not button:
+            rendered_text = self.font.render(text, antialias=True, color=self.color)
+            if centered:
+                rect = rendered_text.get_rect(center=pos)
+                pos = rect
+            screen.blit(rendered_text, pos)
+        elif button:
+            rendered_text = self.font.render(text, antialias=True, color=self.color)
+            rect = rendered_text.get_rect(center=pos)
+            screen.blit(rendered_text, rect)
+
 
 # Button Class
 class Button:
     def __init__(self, x, y, width, height, text, color=(100,100,100), text_color=(255, 255, 255)):
         self.rect = pygame.Rect(x, y, width, height)
+        self.rect.centerx = x
+        self.rect.centery = y
         self.text = text
         self.color = color
         self.text_color = text_color
@@ -30,7 +41,7 @@ class Button:
         pygame.draw.rect(surface, color, self.rect)
         pygame.draw.rect(surface, (0,0,0), self.rect, 2)
 
-        font.draw(surface, self.text, self.rect)
+        font.draw_text(surface, self.text, (self.rect.centerx, self.rect.centery), button=True)
 
     # Event for Button Clicked
     def is_clicked(self, pos):

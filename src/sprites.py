@@ -260,8 +260,9 @@ class Player(GameSprite):
         self.handle_collision(prev_x,prev_y, "VERTI")
         self.check_enemy_collisions(self.enemy_sprites)
 
-        if self.lives == 0:
+        if self.lives <= 0:
             self.kill()
+            self.game.state = "GAME_OVER"
 
     def check_enemy_collisions(self, enemy_sprites):
         hits = pygame.sprite.spritecollide(self, enemy_sprites, False)
@@ -272,9 +273,11 @@ class Player(GameSprite):
                 self.velocity_y = -300
                 self.current_jumps = 1
             else:
+                enemy.kill()
                 self.death_sound.play()
                 self.respawn()
                 self.lives -= 1
+                
 
     def respawn(self):
         """Respawn the player at their spawn position"""
